@@ -1,0 +1,50 @@
+---
+- name: Check whether this node already belongs to a kubeadm cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubernetes_kubelet_kubeconfig
+
+- name: Read installed kubelet version on an existing cluster node
+  ansible.builtin.command:
+    cmd: kubelet --version
+  register: kubernetes_installed_kubelet_version
+  changed_when: false
+  when: kubernetes_kubelet_kubeconfig.stat.exists
+
+- name: Refuse in-place Kubernetes version changes
+  ansible.builtin.assert:
+    that:
+      - (kubernetes_installed_kubelet_version.stdout | trim) == ('Kubernetes v' ~ kubernetes_version)
+    fail_msg: >-
+      This node already belongs to a Kubernetes cluster running
+      {{ kubernetes_installed_kubelet_version.stdout | trim }}, while the lab requests
+      Kubernetes v{{ kubernetes_version }}. This lab intentionally uses a
+      rebuild-only Kubernetes upgrade model; run make destroy and then make up instead of
+      changing the package version in place.
+  when: kubernetes_kubelet_kubeconfig.stat.exists
+
+- name: Configure Kubernetes package repository
+  ansible.builtin.import_tasks: repository.yml
+
+- name: Install Kubernetes node packages
+  ansible.builtin.apt:
+    name:
+      - "kubelet={{ kubernetes_apt_version }}"
+      - "kubeadm={{ kubernetes_apt_version }}"
+      - "kubectl={{ kubernetes_apt_version }}"
+      - cri-tools
+    state: present
+
+- name: Hold Kubernetes packages
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: Enable kubelet
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true

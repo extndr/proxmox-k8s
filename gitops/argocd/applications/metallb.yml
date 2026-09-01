@@ -1,0 +1,40 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://metallb.github.io/metallb
+    chart: metallb
+    targetRevision: "0.16.1"
+    helm:
+      releaseName: metallb
+      valuesObject:
+        frrk8s:
+          enabled: false
+        speaker:
+          frr:
+            enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - FailOnSharedResource=true
+    retry:
+      limit: 5
+      refresh: true
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

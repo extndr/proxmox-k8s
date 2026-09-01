@@ -1,0 +1,27 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.auto.tfvars
+.terraform.tfstate.lock.info
+
+# Keep Terraform provider lockfile in Git
+!.terraform.lock.hcl
+
+# Generated project files
+.cache/
+.kube/
+ansible/inventory/
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+
+# OS
+.DS_Store

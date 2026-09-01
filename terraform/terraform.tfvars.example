@@ -1,0 +1,47 @@
+# Proxmox connection/template settings live in ../.env.
+# This file is Terraform-owned VM topology only. Kubernetes Pod/Service CIDRs
+# live in ../ansible/group_vars/all.yml.
+#
+# Terraform owns VM addressing on an existing Proxmox network. It does not
+# create vmbr0 or the physical/upstream LAN. The selected bridge must already
+# reach the gateway below; any required routing/NAT is a Proxmox/network prerequisite.
+#
+# Changing the VM subnet is a rebuild-level operation. Update any external
+# network configuration or experiments that consume addresses from it separately.
+
+vm_network_cidr = "10.10.10.0/24"
+gateway          = "10.10.10.1"
+dns_servers      = ["1.1.1.1", "9.9.9.9"]
+
+ssh_public_key_file = "~/.ssh/id_ed25519.pub"
+ansible_user        = "ubuntu"
+cluster_name        = "lab"
+
+nodes = {
+  cp01 = {
+    vm_id   = 201
+    role    = "control_plane"
+    ip      = "10.10.10.50"
+    cores   = 2
+    memory  = 3072
+    disk_gb = 20
+  }
+
+  w01 = {
+    vm_id   = 202
+    role    = "worker"
+    ip      = "10.10.10.51"
+    cores   = 2
+    memory  = 3072
+    disk_gb = 20
+  }
+
+  w02 = {
+    vm_id   = 203
+    role    = "worker"
+    ip      = "10.10.10.52"
+    cores   = 2
+    memory  = 3072
+    disk_gb = 20
+  }
+}

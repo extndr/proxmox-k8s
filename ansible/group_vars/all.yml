@@ -1,0 +1,20 @@
+---
+# Kubernetes/node bootstrap settings are Ansible-owned. Long-lived Kubernetes
+# platform state is reconciled separately by Argo CD from gitops/.
+kubernetes_version: "1.36.4"
+kubernetes_minor: "v{{ kubernetes_version.rsplit('.', 1)[0] }}"
+kubernetes_apt_version: "{{ kubernetes_version }}-1.1"
+
+# Rebuild-only cluster networking. Keep both ranges canonical and mutually
+# non-overlapping, and keep them outside the Terraform-owned VM network. The Pod
+# prefix must be /26 or larger address space because Calico uses blockSize 26.
+pod_network_cidr: "10.244.0.0/16"
+service_cidr: "10.96.0.0/12"
+
+calico_version: "v3.32.2"
+# kubeadm join tokens are created only for worker bootstrap and expire quickly.
+kubeadm_join_token_ttl: "15m"
+local_kubeconfig_path: "{{ playbook_dir }}/../.kube/config"
+
+# Supplied by the Terraform-generated inventory:
+# cluster_name, ansible_user, node roles, and node IP addresses.

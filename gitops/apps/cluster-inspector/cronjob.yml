@@ -1,0 +1,62 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cluster-inspector
+  namespace: demo
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: cluster-inspector
+        spec:
+          restartPolicy: Never
+          serviceAccountName: cluster-inspector
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: inspector
+              image: curlimages/curl:8.21.0
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - /config/inspect.sh
+              env:
+                - name: POD_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 1000
+                runAsGroup: 1000
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+          volumes:
+            - name: config
+              configMap:
+                name: cluster-inspector
+                defaultMode: 0555

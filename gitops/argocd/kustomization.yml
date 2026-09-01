@@ -1,0 +1,13 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - projects/platform.yml
+  - projects/workloads.yml
+  - applications/metallb.yml
+  - applications/metallb-config.yml
+  - applications/envoy-gateway.yml
+  - applications/metrics-server.yml
+  - applications/local-path-provisioner.yml
+  - applications/gateway.yml
+  - applications/workloads.yml

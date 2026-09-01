@@ -1,0 +1,82 @@
+---
+- name: Download pinned Calico CRDs manifest
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/v1_crd_projectcalico_org.yaml"
+    dest: "/etc/kubernetes/calico-crds-{{ calico_version }}.yaml"
+    mode: "0644"
+
+- name: Download pinned Tigera operator manifest
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/tigera-operator.yaml"
+    dest: "/etc/kubernetes/tigera-operator-{{ calico_version }}.yaml"
+    mode: "0644"
+
+- name: Apply Calico CRDs
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - apply
+      - --server-side=true
+      - --force-conflicts
+      - --field-manager=lab-ansible
+      - -f
+      - "/etc/kubernetes/calico-crds-{{ calico_version }}.yaml"
+  changed_when: true
+
+- name: Apply Tigera operator
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - apply
+      - --server-side=true
+      - --force-conflicts
+      - --field-manager=lab-ansible
+      - -f
+      - "/etc/kubernetes/tigera-operator-{{ calico_version }}.yaml"
+  changed_when: true
+
+- name: Wait for Calico Installation API
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - wait
+      - --for=condition=Established
+      - crd/installations.operator.tigera.io
+      - --timeout=180s
+  changed_when: false
+
+- name: Render Calico installation
+  ansible.builtin.template:
+    src: calico-installation.yml.j2
+    dest: /etc/kubernetes/calico-installation.yml
+    mode: "0644"
+
+- name: Apply Calico installation
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - apply
+      - -f
+      - /etc/kubernetes/calico-installation.yml
+  changed_when: true
+
+- name: Wait until all Kubernetes nodes are Ready
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - wait
+      - --for=condition=Ready
+      - node
+      - --all
+      - --timeout=600s
+  changed_when: false

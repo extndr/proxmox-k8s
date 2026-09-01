@@ -1,0 +1,123 @@
+---
+- name: Check whether the control plane is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: control_plane_admin_kubeconfig
+
+- name: Read existing kubeadm cluster configuration
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig /etc/kubernetes/admin.conf
+      -n kube-system get configmap kubeadm-config
+      -o jsonpath={.data.ClusterConfiguration}
+  register: control_plane_existing_kubeadm_configuration_raw
+  changed_when: false
+  when: control_plane_admin_kubeconfig.stat.exists
+
+- name: Parse existing kubeadm cluster configuration
+  ansible.builtin.set_fact:
+    control_plane_existing_kubeadm_configuration: "{{ control_plane_existing_kubeadm_configuration_raw.stdout | from_yaml }}"
+  when: control_plane_admin_kubeconfig.stat.exists
+
+- name: Refuse rebuild-only kubeadm drift
+  ansible.builtin.assert:
+    that:
+      - control_plane_existing_kubeadm_configuration.clusterName == cluster_name
+      - control_plane_existing_kubeadm_configuration.networking.podSubnet == pod_network_cidr
+      - control_plane_existing_kubeadm_configuration.networking.serviceSubnet == service_cidr
+      - control_plane_existing_kubeadm_configuration.controlPlaneEndpoint == (ansible_host ~ ':6443')
+    fail_msg: >-
+      The existing cluster uses different rebuild-only kubeadm settings.
+      Run make destroy && make up instead of mutating cluster name, Kubernetes
+      Pod/Service CIDRs, or the control-plane endpoint in place.
+  when: control_plane_admin_kubeconfig.stat.exists
+
+- name: Render kubeadm control-plane configuration
+  ansible.builtin.template:
+    src: kubeadm-config.yml.j2
+    dest: /etc/kubernetes/kubeadm-config.yml
+    mode: "0600"
+
+- name: Initialize Kubernetes control plane
+  ansible.builtin.command:
+    cmd: kubeadm init --config /etc/kubernetes/kubeadm-config.yml
+    creates: /etc/kubernetes/admin.conf
+
+- name: Read Kubernetes nodes registered in the current cluster
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - get
+      - nodes
+      - -o
+      - 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}'
+  register: control_plane_registered_kubernetes_nodes_raw
+  changed_when: false
+
+- name: Remove stale Node objects no longer present in Terraform inventory
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - delete
+      - node
+      - "{{ item }}"
+  loop: >-
+    {{ control_plane_registered_kubernetes_nodes_raw.stdout_lines
+       | reject('equalto', '')
+       | list
+       | difference((groups['control_plane'] | default([])) + (groups['workers'] | default([]))) }}
+  changed_when: true
+
+- name: Check whether workers are already joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['workers'] | default([]) }}"
+  register: control_plane_worker_kubelet_configs
+
+- name: Record whether any worker needs to join
+  ansible.builtin.set_fact:
+    control_plane_workers_need_join: >-
+      {{ control_plane_worker_kubelet_configs.results
+         | selectattr('stat.exists', 'equalto', false)
+         | list
+         | length > 0 }}
+
+- name: Create short-lived worker join command when needed
+  no_log: true
+  ansible.builtin.command:
+    cmd: "kubeadm token create --ttl {{ kubeadm_join_token_ttl }} --print-join-command"
+  register: control_plane_kubeadm_join_command_created
+  changed_when: true
+  when: control_plane_workers_need_join | bool
+
+- name: Publish worker join command
+  no_log: true
+  ansible.builtin.set_fact:
+    control_plane_kubeadm_join_command: "{{ control_plane_kubeadm_join_command_created.stdout | trim }}"
+  when: control_plane_workers_need_join | bool
+
+- name: Ensure local kubeconfig directory exists
+  ansible.builtin.file:
+    path: "{{ local_kubeconfig_path | dirname }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Fetch kubeadm admin kubeconfig to workstation
+  ansible.builtin.fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ local_kubeconfig_path }}"
+    flat: true
+
+- name: Restrict local kubeconfig permissions
+  ansible.builtin.file:
+    path: "{{ local_kubeconfig_path }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false

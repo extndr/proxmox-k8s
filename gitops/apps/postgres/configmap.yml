@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres
+  namespace: demo
+data:
+  POSTGRES_DB: lab
+  POSTGRES_USER: lab

@@ -1,0 +1,32 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb-config
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/extndr/proxmox-k8s.git
+    targetRevision: HEAD
+    path: gitops/platform/metallb
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+      - FailOnSharedResource=true
+    retry:
+      limit: 10
+      refresh: true
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

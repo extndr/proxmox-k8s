@@ -1,0 +1,67 @@
+---
+- name: Wait for cloud-init to finish
+  ansible.builtin.command:
+    cmd: cloud-init status --wait --format=json
+  register: common_cloud_init_status
+  changed_when: false
+  # Proxmox native cloud-init currently emits a deprecated `user` field, so
+  # cloud-init may return 2 (recoverable/degraded) even though initialization
+  # completed. Exit 1 is the unrecoverable failure state.
+  failed_when: common_cloud_init_status.rc not in [0, 2]
+
+- name: Set deterministic hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  when: ansible_facts["swaptotal_mb"] | int > 0
+  changed_when: true
+
+- name: Disable swap entries in fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(?!#)(.*\s+swap\s+.*)$'
+    replace: '# \1'
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - conntrack
+      - curl
+      - gpg
+      - python3-debian
+      - socat
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Persist required kernel modules
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/kubernetes.conf
+    mode: "0644"
+    content: |
+      {% for module in common_kubernetes_kernel_modules %}
+      {{ module }}
+      {% endfor %}
+
+- name: Load required kernel modules
+  ansible.builtin.command: "modprobe {{ item }}"
+  loop: "{{ common_kubernetes_kernel_modules }}"
+  changed_when: false
+
+- name: Persist Kubernetes sysctls
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    mode: "0644"
+    content: |
+      {% for key, value in common_kubernetes_sysctls.items() %}
+      {{ key }} = {{ value }}
+      {% endfor %}
+  register: common_kubernetes_sysctl_file
+
+- name: Reload sysctls
+  ansible.builtin.command: sysctl --system
+  when: common_kubernetes_sysctl_file.changed
+  changed_when: true

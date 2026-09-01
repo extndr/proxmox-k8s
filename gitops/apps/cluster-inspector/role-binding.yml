@@ -1,0 +1,14 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-inspector
+  namespace: demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-inspector
+subjects:
+  - kind: ServiceAccount
+    name: cluster-inspector
+    namespace: demo
