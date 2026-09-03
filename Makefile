@@ -20,7 +20,6 @@ export PVE_SSH
 export ANSIBLE_PRIVATE_KEY_FILE
 export TF_VAR_proxmox_endpoint
 export TF_VAR_proxmox_insecure
-export TF_VAR_proxmox_api_token
 export TF_VAR_proxmox_node
 export TF_VAR_template_vm_id
 export TF_VAR_vm_datastore
@@ -30,31 +29,57 @@ endif
 INVENTORY_DIR := $(ANSIBLE_DIR)/inventory
 INVENTORY := $(INVENTORY_DIR)/hosts.json
 KUBECONFIG_FILE := $(CURDIR)/.kube/config
+SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
+export SOPS_AGE_KEY_FILE
+PROXMOX_SECRET := secrets/proxmox.sops.yaml
 
-.PHONY: help template fmt lint validate test scan tf-init plan infra inventory configure install-argocd verify up reset destroy clean
+.PHONY: help secrets secrets-init secrets-edit template fmt lint validate test scan tf-init plan infra inventory configure install-argocd verify up reset destroy clean
 
 help:
 	@printf '%s\n' \
 	  'Development:' \
-	  '  make fmt               - format tracked Terraform files' \
-	  '  make lint              - lint repository source files' \
-	  '  make validate          - validate Terraform and render GitOps configuration' \
-	  '  make test              - run Terraform tests' \
-	  '  make scan              - scan repository files for secrets and IaC misconfigurations' \
+	  '  make fmt                 - format tracked Terraform files' \
+	  '  make lint                - lint repository source files' \
+	  '  make validate            - validate Terraform and render GitOps configuration' \
+	  '  make test                - run Terraform tests' \
+	  '  make scan                - scan repository files for secrets and IaC misconfigurations' \
+	  '' \
+	  'Secrets:' \
+	  '  make secrets             - check encrypted secrets and local SOPS access' \
+	  '  make secrets-init        - create the local age identity and SOPS config' \
+	  '  make secrets-edit NAME=x - edit one encrypted secret' \
+	  '' \
+	  'Argo CD:' \
+	  '  make install-argocd      - install/recover Argo CD and seed the root Application' \
+	  '  make argocd-password     - show the initial admin password' \
+	  '  make argocd-forward      - forward the UI to https://localhost:8080' \
 	  '' \
 	  'Lab:' \
-	  '  make template          - create the reusable Ubuntu cloud-init template in Proxmox' \
-	  '  make plan              - show the Terraform plan' \
-	  '  make up                - provision the complete GitOps lab and verify it' \
-	  '  make verify            - verify cluster readiness and Argo reconciliation' \
-	  '  make reset              - reset kubeadm/CNI state on the existing VMs' \
-	  '  make destroy           - destroy Terraform-managed Kubernetes VMs' \
-	  '  make clean             - remove generated local inventory and kubeconfig' \
-	  '' \
-	  'Stepwise / recovery:' \
-	  '  make infra             - create/update the Kubernetes VMs' \
-	  '  make configure         - configure VM/OS state and Kubernetes bootstrap' \
-	  '  make install-argocd    - install/recover Argo CD and seed the root Application'
+	  '  make template            - create the reusable Ubuntu cloud-init template in Proxmox' \
+	  '  make plan                - show the Terraform plan' \
+	  '  make up                  - provision the complete GitOps lab and verify it' \
+	  '  make verify              - verify cluster readiness and Argo reconciliation' \
+	  '  make reset               - reset kubeadm/CNI state on the existing VMs' \
+	  '  make destroy             - destroy Terraform-managed Kubernetes VMs' \
+	  '  make clean               - remove generated local inventory and kubeconfig' \
+	  ''
+
+secrets:
+	@test -f .sops.yaml || { echo 'ERROR: .sops.yaml is missing; run make secrets-init.' >&2; exit 1; }
+	@test -f "$(SOPS_AGE_KEY_FILE)" || { echo 'ERROR: age identity is missing; restore $(SOPS_AGE_KEY_FILE).' >&2; exit 1; }
+	@test -f "$(PROXMOX_SECRET)" || { echo 'ERROR: $(PROXMOX_SECRET) is missing; run make secrets-init.' >&2; exit 1; }
+	@test "$$(sops filestatus "$(PROXMOX_SECRET)")" = '{"encrypted":true}' || { echo 'ERROR: $(PROXMOX_SECRET) is not SOPS-encrypted.' >&2; exit 1; }
+	@sops exec-env "$(PROXMOX_SECRET)" 'test -n "$${TF_VAR_proxmox_api_token:-}" && test "$$TF_VAR_proxmox_api_token" != CHANGE_ME' >/dev/null || { echo 'ERROR: Proxmox API token is missing or not decryptable.' >&2; exit 1; }
+	@printf '%s\n' 'SOPS config:  ok' 'age identity: ok' 'proxmox:      decryptable'
+
+secrets-init:
+	@SOPS_AGE_KEY_FILE="$(SOPS_AGE_KEY_FILE)" ./scripts/sops-init.sh
+
+secrets-edit:
+	@test -n "$(NAME)" || { echo 'ERROR: NAME is required, for example: make secrets-edit NAME=proxmox' >&2; exit 1; }
+	@file="secrets/$(NAME).sops.yaml"; \
+		test -f "$$file" || { echo "ERROR: $$file does not exist." >&2; exit 1; }; \
+		exec sops "$$file"
 
 # Template creation stays a one-time host prerequisite while the pinned
 # bpg/proxmox 0.111.1 provider has the known first-apply import_from bug #3022.
@@ -76,6 +101,13 @@ lint:
 		xargs -0 -r terraform fmt -check
 	@ANSIBLE_CONFIG="$(CURDIR)/$(ANSIBLE_DIR)/ansible.cfg" ansible-lint "$(ANSIBLE_DIR)"
 	@shellcheck scripts/*.sh
+	@if [ -d secrets ]; then \
+		bad="$$(find secrets -type f ! -name '*.sops.yaml' -print -quit)"; \
+		test -z "$$bad" || { echo "ERROR: unencrypted file under secrets/: $$bad" >&2; exit 1; }; \
+		while IFS= read -r -d '' file; do \
+			test "$$(sops filestatus "$$file")" = '{"encrypted":true}' || { echo "ERROR: $$file is not SOPS-encrypted." >&2; exit 1; }; \
+		done < <(find secrets -type f -name '*.sops.yaml' -print0); \
+	fi
 
 validate:
 	@terraform -chdir="$(TF_DIR)" init -backend=false -input=false -lockfile=readonly >/dev/null
@@ -101,10 +133,10 @@ tf-init:
 	@terraform -chdir="$(TF_DIR)" init
 
 plan: tf-init
-	@terraform -chdir="$(TF_DIR)" plan
+	@sops exec-env --same-process "$(PROXMOX_SECRET)" 'test -n "$${TF_VAR_proxmox_api_token:-}" && test "$$TF_VAR_proxmox_api_token" != CHANGE_ME || { echo "ERROR: run make secrets first" >&2; exit 1; }; exec terraform -chdir="$(TF_DIR)" plan'
 
 infra: tf-init
-	@terraform -chdir="$(TF_DIR)" apply
+	@sops exec-env --same-process "$(PROXMOX_SECRET)" 'test -n "$${TF_VAR_proxmox_api_token:-}" && test "$$TF_VAR_proxmox_api_token" != CHANGE_ME || { echo "ERROR: run make secrets first" >&2; exit 1; }; exec terraform -chdir="$(TF_DIR)" apply'
 
 inventory:
 	@mkdir -p "$(INVENTORY_DIR)"
@@ -134,6 +166,15 @@ install-argocd:
 		apply --server-side=true --field-manager=lab-bootstrap \
 		-f "$(ARGOCD_DIR)/root-application.yml"
 
+argocd-password:
+	@kubectl --kubeconfig "$(KUBECONFIG_FILE)" \
+		-n argocd get secret argocd-initial-admin-secret \
+		-o jsonpath='{.data.password}' | base64 -d; echo
+
+argocd-forward:
+	@kubectl --kubeconfig "$(KUBECONFIG_FILE)" \
+		-n argocd port-forward svc/argocd-server 8080:443
+
 verify:
 	@TF_DIR="$(TF_DIR)" KUBECONFIG="$(KUBECONFIG_FILE)" ./scripts/verify.sh
 
@@ -149,7 +190,7 @@ reset: inventory
 	@rm -rf "$(CURDIR)/.kube"
 
 destroy: tf-init
-	@terraform -chdir="$(TF_DIR)" destroy
+	@sops exec-env --same-process "$(PROXMOX_SECRET)" 'test -n "$${TF_VAR_proxmox_api_token:-}" && test "$$TF_VAR_proxmox_api_token" != CHANGE_ME || { echo "ERROR: run make secrets first" >&2; exit 1; }; exec terraform -chdir="$(TF_DIR)" destroy'
 	@rm -rf "$(INVENTORY_DIR)" "$(CURDIR)/.kube"
 
 clean:

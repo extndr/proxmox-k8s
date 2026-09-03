@@ -7,7 +7,12 @@ cp .env.example .env
 set -a; source .env; set +a
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 mise install
+make secrets-init
+make secrets-edit NAME=proxmox
+make secrets
 ```
+
+The Proxmox API token is stored with SOPS. Keep the age identity outside the repository and back it up separately.
 
 ## Checks
 

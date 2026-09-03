@@ -4,7 +4,7 @@ variable "proxmox_endpoint" {
 }
 
 variable "proxmox_api_token" {
-  description = "Proxmox API token in USER@REALM!TOKENID=SECRET format. Provide it via TF_VAR_proxmox_api_token (normally from .env)."
+  description = "Proxmox API token in USER@REALM!TOKENID=SECRET format."
   type        = string
   sensitive   = true
 }

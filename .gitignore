@@ -25,3 +25,9 @@ ansible/inventory/
 
 # OS
 .DS_Store
+
+# Only SOPS-encrypted secret files may be tracked
+secrets/**
+!secrets/**/
+!secrets/**/*.sops.yaml
+!secrets/*.sops.yaml
