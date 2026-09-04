@@ -1,0 +1,41 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: platform-alerts
+  namespace: monitoring
+  labels:
+    monitoring: platform
+spec:
+  groups:
+    - name: platform
+      rules:
+        - alert: ProxmoxGuestDown
+          expr: >-
+            (pve_up{id=~"qemu/.+"}
+            * on (id) group_left(name)
+            pve_guest_info{name=~"k8s-(cp01|w01|w02)"}) == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Proxmox guest {{ $labels.name }} is down"
+            description: "The Kubernetes VM has been reported as stopped by Proxmox for at least five minutes."
+
+        - alert: ArgoApplicationDegraded
+          expr: argocd_app_info{health_status=~"Degraded|Missing|Unknown"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} is unhealthy"
+            description: "Argo CD has reported a non-healthy application state for at least five minutes."
+
+        - alert: ArgoApplicationOutOfSync
+          expr: argocd_app_info{sync_status!="Synced"} == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} is out of sync"
+            description: "The application has differed from its Git state for at least ten minutes."

@@ -1,0 +1,26 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pve-exporter
+  namespace: monitoring
+  labels:
+    monitoring: platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pve-exporter
+  endpoints:
+    - port: http
+      path: /pve
+      interval: 30s
+      scrapeTimeout: 10s
+      params:
+        module:
+          - default
+        target:
+          - pve
+        cluster:
+          - "1"
+        node:
+          - "1"

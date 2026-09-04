@@ -23,6 +23,8 @@ ansible/inventory/
 *.pem
 *.key
 
+*.swp
+
 # OS
 .DS_Store
 

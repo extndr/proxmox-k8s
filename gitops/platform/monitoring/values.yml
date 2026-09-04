@@ -1,0 +1,163 @@
+---
+commonLabels:
+  monitoring: platform
+
+# kubeadm keeps these endpoints on loopback by default. Do not create
+# permanently-down targets for components Prometheus cannot reach.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeProxy: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+
+# node-exporter requires host access, so only that subchart runs in
+# kube-system instead of the restricted monitoring namespace.
+prometheus-node-exporter:
+  namespaceOverride: kube-system
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 96Mi
+  prometheus:
+    monitor:
+      enabled: true
+      namespace: monitoring
+      additionalLabels:
+        monitoring: platform
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  prometheus:
+    monitor:
+      additionalLabels:
+        monitoring: platform
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+prometheus:
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    retention: 7d
+    retentionSize: 4GiB
+    walCompression: true
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector:
+      matchLabels:
+        monitoring: platform
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels:
+        monitoring: platform
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector:
+      matchLabels:
+        monitoring: platform
+
+    ruleNamespaceSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorNamespaceSelector: {}
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 5Gi
+
+alertmanager:
+  service:
+    type: ClusterIP
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+grafana:
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: ClusterIP
+  serviceMonitor:
+    labels:
+      monitoring: platform
+  persistence:
+    enabled: false
+  testFramework:
+    enabled: false
+  initChownData:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  sidecar:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: monitoring
+  grafana.ini:
+    users:
+      allow_sign_up: false
+    auth.anonymous:
+      enabled: false
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false

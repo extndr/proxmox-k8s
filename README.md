@@ -9,10 +9,11 @@ cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 mise install
 make secrets-init
 make secrets-edit NAME=proxmox
+make secrets-edit NAME=monitoring
 make secrets
 ```
 
-The Proxmox API token is stored with SOPS. Keep the age identity outside the repository and back it up separately.
+Infrastructure and monitoring credentials are stored with SOPS. Keep the age identity outside the repository and back it up separately.
 
 ## Checks
 
@@ -37,6 +38,7 @@ Step by step:
 ```bash
 make infra
 make configure
+make secrets-apply
 make install-argocd
 ```
 

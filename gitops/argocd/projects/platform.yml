@@ -12,6 +12,7 @@ spec:
     - https://metallb.github.io/metallb
     - docker.io/envoyproxy
     - https://kubernetes-sigs.github.io/metrics-server/
+    - https://prometheus-community.github.io/helm-charts
     - ghcr.io/rancher/local-path-provisioner/charts
   destinations:
     - server: https://kubernetes.default.svc
@@ -24,6 +25,8 @@ spec:
       namespace: demo
     - server: https://kubernetes.default.svc
       namespace: local-path-storage
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"

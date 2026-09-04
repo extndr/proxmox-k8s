@@ -1,0 +1,47 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: "88.6.1"
+      helm:
+        releaseName: monitoring
+        valueFiles:
+          - $values/gitops/platform/monitoring/values.yml
+    - repoURL: https://github.com/extndr/proxmox-k8s.git
+      targetRevision: HEAD
+      ref: values
+      path: gitops/platform/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/audit: restricted
+        pod-security.kubernetes.io/warn: restricted
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+      - FailOnSharedResource=true
+    retry:
+      limit: 10
+      refresh: true
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

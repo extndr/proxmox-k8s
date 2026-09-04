@@ -18,6 +18,7 @@ gitops/argocd/applications/
 ## Commands
 
 ```bash
+make secrets-apply
 make install-argocd
 make verify
 
