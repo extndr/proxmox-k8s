@@ -2,11 +2,28 @@
 
 ## Workloads
 
+Workloads under this directory are automatically reconciled by the `workloads` ApplicationSet:
+
 ```text
-gitops/apps/<name>/
+gitops/workloads/<name>/
 ```
 
-Managed by the workloads ApplicationSet.
+Removing a directory from `gitops/workloads/` removes its generated Argo CD Application and prunes the resources managed by that Application. Move disposable or on-demand manifests to `gitops/examples/` instead of leaving them under automatic reconciliation.
+
+## Examples
+
+Optional lab examples are kept outside the ApplicationSet and are not deployed automatically:
+
+```text
+gitops/examples/<name>/
+```
+
+Render or apply an example explicitly when needed, for example:
+
+```bash
+kubectl kustomize gitops/examples/podinfo
+kubectl apply -k gitops/examples/podinfo
+```
 
 ## Platform
 
@@ -14,6 +31,8 @@ Managed by the workloads ApplicationSet.
 gitops/platform/
 gitops/argocd/applications/
 ```
+
+`demo-gateway` exposes one shared HTTP listener for `*.lab.home.arpa`. Each workload owns its precise hostname in its `HTTPRoute`, so adding a workload under that domain does not require editing the central Gateway.
 
 ## Commands
 

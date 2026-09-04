@@ -3,7 +3,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: demo
 spec:
   clusterIP: None
   selector:

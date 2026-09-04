@@ -11,9 +11,9 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/extndr/proxmox-k8s.git
-        revision: HEAD
+        revision: main
         directories:
-          - path: gitops/apps/*
+          - path: gitops/workloads/*
   template:
     metadata:
       name: '{{ .path.basenameNormalized }}'
@@ -22,7 +22,7 @@ spec:
       project: workloads
       source:
         repoURL: https://github.com/extndr/proxmox-k8s.git
-        targetRevision: HEAD
+        targetRevision: main
         path: '{{ .path.path }}'
       destination:
         server: https://kubernetes.default.svc

@@ -8,7 +8,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/extndr/proxmox-k8s.git
-    targetRevision: HEAD
+    targetRevision: main
     path: gitops/argocd
   destination:
     server: https://kubernetes.default.svc

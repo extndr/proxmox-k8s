@@ -21,9 +21,9 @@ Alert notifications use a self-hosted ntfy server deployed by GitOps. Alertmanag
 Alertmanager -> ntfy.demo.svc.cluster.local -> homelab-alerts
 ```
 
-ntfy applies its built-in `alertmanager` webhook template, so no relay, custom formatter, hosted ntfy account, or notification token is required. `warning` and `critical` alerts are delivered to ntfy, resolved notifications are enabled, and the always-firing `Watchdog` alert stays on the null receiver.
+ntfy applies its built-in `alertmanager` webhook template, so no relay, custom formatter, hosted ntfy account, or notification token is required. `info`, `warning`, and `critical` alerts are delivered to ntfy, resolved notifications are enabled, and the always-firing `Watchdog` alert stays on the null receiver.
 
-The ntfy UI is exposed through the existing Envoy Gateway at `http://ntfy.lab.home.arpa`. Point that hostname at the same MetalLB address as `demo.lab.home.arpa`, then subscribe the phone app to the `homelab-alerts` topic on that server. LAN clients must also have a route to the MetalLB subnet; with the repository defaults, the router should route `10.10.10.0/24` via the Proxmox host (`192.168.0.122`) so phones do not need per-device static routes.
+The ntfy UI is exposed through the existing Envoy Gateway at `http://ntfy.lab.home.arpa`. Point that hostname at the MetalLB address assigned to `demo-gateway`, then subscribe the phone app to the `homelab-alerts` topic on that server. LAN clients must also have a route to the MetalLB subnet; with the repository defaults, the router should route `10.10.10.0/24` via the Proxmox host (`192.168.0.122`) so phones do not need per-device static routes.
 
 ## Checks
 

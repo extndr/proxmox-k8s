@@ -3,7 +3,6 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: cluster-inspector
-  namespace: demo
 spec:
   schedule: "*/10 * * * *"
   concurrencyPolicy: Forbid
@@ -26,10 +25,26 @@ spec:
           containers:
             - name: inspector
               image: curlimages/curl:8.21.0
-              imagePullPolicy: IfNotPresent
               command:
                 - /bin/sh
-                - /config/inspect.sh
+                - -c
+              args:
+                - |
+                  set -eu
+
+                  token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+                  ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                  api="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}"
+
+                  curl --fail --silent --show-error \
+                    --connect-timeout 5 \
+                    --max-time 15 \
+                    --cacert "$ca" \
+                    --header "Authorization: Bearer $token" \
+                    "$api/api/v1/namespaces/$POD_NAMESPACE/pods" \
+                    >/dev/null
+
+                  echo "Kubernetes API access is allowed for pods in namespace $POD_NAMESPACE."
               env:
                 - name: POD_NAMESPACE
                   valueFrom:
@@ -51,12 +66,3 @@ spec:
                 capabilities:
                   drop:
                     - ALL
-              volumeMounts:
-                - name: config
-                  mountPath: /config
-                  readOnly: true
-          volumes:
-            - name: config
-              configMap:
-                name: cluster-inspector
-                defaultMode: 0555

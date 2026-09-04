@@ -10,7 +10,7 @@ spec:
   project: platform
   source:
     repoURL: https://github.com/extndr/proxmox-k8s.git
-    targetRevision: HEAD
+    targetRevision: main
     path: gitops/platform/metallb
   destination:
     server: https://kubernetes.default.svc

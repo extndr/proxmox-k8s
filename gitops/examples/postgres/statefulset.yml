@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: demo
 spec:
   serviceName: postgres
   replicas: 1
@@ -29,12 +28,16 @@ spec:
       containers:
         - name: postgres
           image: postgres:18.6-alpine
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - configMapRef:
-                name: postgres
-            - secretRef:
-                name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: lab
+            - name: POSTGRES_USER
+              value: lab
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: POSTGRES_PASSWORD
           ports:
             - name: postgres
               containerPort: 5432
