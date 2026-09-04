@@ -83,7 +83,7 @@ secrets:
 		sops decrypt "$$file" >/dev/null || { echo "ERROR: $$file is not decryptable with the current age identity." >&2; exit 1; }; \
 	done
 	@sops exec-env "$(PROXMOX_SECRET)" 'test -n "$${TF_VAR_proxmox_api_token:-}" && test "$$TF_VAR_proxmox_api_token" != CHANGE_ME' >/dev/null || { echo 'ERROR: Proxmox API token is missing or invalid.' >&2; exit 1; }
-	@sops exec-env "$(MONITORING_SECRET)" 'test -n "$${GRAFANA_ADMIN_PASSWORD:-}" && test "$$GRAFANA_ADMIN_PASSWORD" != CHANGE_ME && test -n "$${PVE_MONITORING_TOKEN_VALUE:-}" && test "$$PVE_MONITORING_TOKEN_VALUE" != CHANGE_ME' >/dev/null || { echo 'ERROR: monitoring secrets are incomplete; run make secrets-edit NAME=monitoring.' >&2; exit 1; }
+	@sops exec-env "$(MONITORING_SECRET)" 'test -n "$${GRAFANA_ADMIN_PASSWORD:-}" && test "$$GRAFANA_ADMIN_PASSWORD" != CHANGE_ME && test -n "$${PVE_MONITORING_TOKEN_VALUE:-}" && test "$$PVE_MONITORING_TOKEN_VALUE" != CHANGE_ME' >/dev/null || { echo 'ERROR: monitoring secrets are incomplete; run make secrets-init, then make secrets-edit NAME=monitoring.' >&2; exit 1; }
 	@printf '%s\n' 'SOPS config:  ok' 'age identity: ok' 'proxmox:      decryptable' 'monitoring:   decryptable'
 
 secrets-init:
