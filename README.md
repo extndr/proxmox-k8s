@@ -25,6 +25,16 @@ ntfy applies its built-in `alertmanager` webhook template, so no relay, custom f
 
 The ntfy UI is exposed through the existing Envoy Gateway at `http://ntfy.lab.home.arpa`. Point that hostname at the MetalLB address assigned to `demo-gateway`, then subscribe the phone app to the `homelab-alerts` topic on that server. LAN clients must also have a route to the MetalLB subnet; with the repository defaults, the router should route `10.10.10.0/24` via the Proxmox host (`192.168.0.122`) so phones do not need per-device static routes.
 
+## Demo workload
+
+`demo-app/` is a minimal Go service used to exercise the cluster rather than model application business logic. It exposes `/healthz`, `/readyz`, `/db`, and `/version`; PostgreSQL is its only runtime dependency.
+
+The existing CI workflow builds the image and, on pushes to `main`, publishes it to `ghcr.io/extndr/proxmox-k8s-demo-app`, writes the resulting immutable digest into the Kustomize image definition in `gitops/workloads/demo-app/kustomization.yml`, and commits that desired-state change. Argo CD then reconciles Kubernetes; the worker selected by the scheduler pulls the image from GHCR.
+
+After the first successful package publish, make the GHCR package public so the lab workers can pull it without an `imagePullSecret`. Run `make secrets-init` once after adding these workloads so `secrets/workloads.sops.yaml` is generated for the PostgreSQL password, then commit that encrypted file.
+
+The demo endpoint is `http://demo.lab.home.arpa` once the hostname resolves to the shared Gateway address.
+
 ## Checks
 
 ```bash

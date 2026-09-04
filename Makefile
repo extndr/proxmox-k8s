@@ -33,6 +33,7 @@ SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 export SOPS_AGE_KEY_FILE
 PROXMOX_SECRET := secrets/proxmox.sops.yaml
 MONITORING_SECRET := secrets/monitoring.sops.yaml
+WORKLOADS_SECRET := secrets/workloads.sops.yaml
 
 .PHONY: help secrets secrets-init secrets-edit secrets-apply template fmt lint validate test scan tf-init plan infra inventory configure install-argocd argocd-password argocd-forward monitoring-bootstrap monitoring-status grafana-password grafana-forward prometheus-forward alertmanager-forward verify up reset destroy clean
 
@@ -77,14 +78,15 @@ help:
 secrets:
 	@test -f .sops.yaml || { echo 'ERROR: .sops.yaml is missing; run make secrets-init.' >&2; exit 1; }
 	@test -f "$(SOPS_AGE_KEY_FILE)" || { echo 'ERROR: age identity is missing; restore $(SOPS_AGE_KEY_FILE).' >&2; exit 1; }
-	@for file in "$(PROXMOX_SECRET)" "$(MONITORING_SECRET)"; do \
+	@for file in "$(PROXMOX_SECRET)" "$(MONITORING_SECRET)" "$(WORKLOADS_SECRET)"; do \
 		test -f "$$file" || { echo "ERROR: $$file is missing; run make secrets-init." >&2; exit 1; }; \
 		test "$$(sops filestatus "$$file")" = '{"encrypted":true}' || { echo "ERROR: $$file is not SOPS-encrypted." >&2; exit 1; }; \
 		sops decrypt "$$file" >/dev/null || { echo "ERROR: $$file is not decryptable with the current age identity." >&2; exit 1; }; \
 	done
 	@sops exec-env "$(PROXMOX_SECRET)" 'test -n "$${TF_VAR_proxmox_api_token:-}" && test "$$TF_VAR_proxmox_api_token" != CHANGE_ME' >/dev/null || { echo 'ERROR: Proxmox API token is missing or invalid.' >&2; exit 1; }
 	@sops exec-env "$(MONITORING_SECRET)" 'test -n "$${GRAFANA_ADMIN_PASSWORD:-}" && test "$$GRAFANA_ADMIN_PASSWORD" != CHANGE_ME && test -n "$${PVE_MONITORING_TOKEN_VALUE:-}" && test "$$PVE_MONITORING_TOKEN_VALUE" != CHANGE_ME' >/dev/null || { echo 'ERROR: monitoring secrets are incomplete; run make secrets-init, then make secrets-edit NAME=monitoring.' >&2; exit 1; }
-	@printf '%s\n' 'SOPS config:  ok' 'age identity: ok' 'proxmox:      decryptable' 'monitoring:   decryptable'
+	@sops exec-env "$(WORKLOADS_SECRET)" 'test -n "$${POSTGRES_PASSWORD:-}" && test "$$POSTGRES_PASSWORD" != CHANGE_ME' >/dev/null || { echo 'ERROR: workload secrets are incomplete; run make secrets-init.' >&2; exit 1; }
+	@printf '%s\n' 'SOPS config:  ok' 'age identity: ok' 'proxmox:      decryptable' 'monitoring:   decryptable' 'workloads:    decryptable'
 
 secrets-init:
 	@SOPS_AGE_KEY_FILE="$(SOPS_AGE_KEY_FILE)" ./scripts/sops-init.sh
@@ -107,6 +109,13 @@ secrets-apply: secrets
 		printf %s "$$PVE_MONITORING_TOKEN_VALUE" | \
 		  kubectl -n monitoring create secret generic pve-exporter-credentials \
 		    --from-file=token-value=/dev/stdin \
+		    --dry-run=client -o yaml | kubectl apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null'
+	@kubectl --kubeconfig "$(KUBECONFIG_FILE)" create namespace demo --dry-run=client -o yaml | \
+		kubectl --kubeconfig "$(KUBECONFIG_FILE)" apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null
+	@KUBECONFIG="$(KUBECONFIG_FILE)" sops exec-env "$(WORKLOADS_SECRET)" '\
+		printf %s "$$POSTGRES_PASSWORD" | \
+		  kubectl -n demo create secret generic postgres-credentials \
+		    --from-file=password=/dev/stdin \
 		    --dry-run=client -o yaml | kubectl apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null'
 	@test -n "$${PVE_SSH:-}" || { echo 'ERROR: PVE_SSH is required in .env to fetch the Proxmox CA.' >&2; exit 1; }
 	@ssh "$${PVE_SSH}" cat /etc/pve/pve-root-ca.pem | \
@@ -148,7 +157,7 @@ validate:
 	@terraform -chdir="$(TF_DIR)" init -backend=false -input=false -lockfile=readonly >/dev/null
 	@terraform -chdir="$(TF_DIR)" validate
 	@while IFS= read -r -d '' file; do \
-		kubectl kustomize "$$(dirname "$$file")" >/dev/null; \
+		kustomize build "$$(dirname "$$file")" >/dev/null; \
 	done < <(find gitops -type f -name kustomization.yml -print0)
 
 test:
@@ -186,7 +195,7 @@ configure: inventory
 		-i "$(INVENTORY)" \
 		"$(ANSIBLE_DIR)/site.yml"
 
-# The install uses the official pinned manifest via Kustomize, 
+# The install uses the official pinned manifest via Kustomize,
 # then seeds the single root Application from this repository.
 install-argocd:
 	@kubectl --kubeconfig "$(KUBECONFIG_FILE)" \
