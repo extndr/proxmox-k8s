@@ -6,6 +6,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 config=.sops.yaml
 secret=secrets/proxmox.sops.yaml
 monitoring_secret=secrets/monitoring.sops.yaml
+workloads_secret=secrets/workloads.sops.yaml
 age_key=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
 
 die() {
@@ -18,7 +19,7 @@ for command in sops age-keygen openssl; do
 done
 
 if [[ ! -f "$age_key" ]]; then
-  if [[ -f "$config" ]] || [[ -f "$secret" ]] || [[ -f "$monitoring_secret" ]]; then
+  if [[ -f "$config" ]] || [[ -f "$secret" ]] || [[ -f "$monitoring_secret" ]] || [[ -f "$workloads_secret" ]]; then
     die "age identity is missing. Restore it instead of creating a new one."
   fi
 
@@ -71,9 +72,24 @@ fi
 
 sops decrypt "$monitoring_secret" >/dev/null || die "the current age identity cannot decrypt $monitoring_secret."
 
+if [[ ! -f "$workloads_secret" ]]; then
+  postgres_password=$(openssl rand -hex 24)
+  tmp=$(mktemp "${workloads_secret}.XXXXXX")
+  if ! printf '%s\n' \
+    "POSTGRES_PASSWORD: $postgres_password" | \
+    sops encrypt --filename-override "$workloads_secret" > "$tmp"; then
+    rm -f "$tmp"
+    exit 1
+  fi
+  mv "$tmp" "$workloads_secret"
+fi
+
+sops decrypt "$workloads_secret" >/dev/null || die "the current age identity cannot decrypt $workloads_secret."
+
 printf '%s\n' \
   "SOPS config:  $config" \
   "age identity: $age_key" \
   "secret:       $secret" \
   "monitoring:   $monitoring_secret" \
+  "workloads:    $workloads_secret" \
   'Next: make secrets-edit NAME=monitoring'

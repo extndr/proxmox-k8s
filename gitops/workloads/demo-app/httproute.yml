@@ -2,7 +2,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: podinfo
+  name: demo-app
 spec:
   parentRefs:
     - name: demo-gateway
@@ -11,5 +11,5 @@ spec:
     - demo.lab.home.arpa
   rules:
     - backendRefs:
-        - name: podinfo
-          port: 9898
+        - name: demo-app
+          port: 80

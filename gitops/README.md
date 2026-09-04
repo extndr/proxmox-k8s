@@ -2,28 +2,27 @@
 
 ## Workloads
 
-Workloads under this directory are automatically reconciled by the `workloads` ApplicationSet:
+Every directory under `gitops/workloads/` is a desired-state workload automatically reconciled by the `workloads` ApplicationSet:
 
 ```text
 gitops/workloads/<name>/
 ```
 
-Removing a directory from `gitops/workloads/` removes its generated Argo CD Application and prunes the resources managed by that Application. Move disposable or on-demand manifests to `gitops/examples/` instead of leaving them under automatic reconciliation.
+The lab currently runs:
 
-## Examples
+- `demo-app` — two-replica Go workload exposed through Gateway API.
+- `postgres` — single-instance PostgreSQL dependency backed by `local-path` storage.
+- `ntfy` — local notification service used by Alertmanager.
 
-Optional lab examples are kept outside the ApplicationSet and are not deployed automatically:
+Removing a workload directory removes its generated Argo CD Application and prunes resources owned by that Application. Persistent data must therefore have an explicit lifecycle independent of disposable workload resources.
+
+The demo application follows the GitOps image path:
 
 ```text
-gitops/examples/<name>/
+CI -> GHCR -> Git image digest update -> Argo CD -> Kubernetes -> worker containerd -> GHCR
 ```
 
-Render or apply an example explicitly when needed, for example:
-
-```bash
-kubectl kustomize gitops/examples/podinfo
-kubectl apply -k gitops/examples/podinfo
-```
+Argo CD never pulls the container image itself. It reconciles the Deployment from Git; kubelet/containerd on the scheduled worker pulls the referenced image from GHCR.
 
 ## Platform
 
