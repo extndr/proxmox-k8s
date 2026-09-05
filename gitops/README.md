@@ -8,12 +8,6 @@ Every directory under `gitops/workloads/` is a desired-state workload automatica
 gitops/workloads/<name>/
 ```
 
-The lab currently runs:
-
-- `demo-app` — two-replica Go workload exposed through Gateway API.
-- `postgres` — single-instance PostgreSQL dependency backed by `local-path` storage.
-- `ntfy` — local notification service used by Alertmanager.
-
 Removing a workload directory removes its generated Argo CD Application and prunes resources owned by that Application. Persistent data must therefore have an explicit lifecycle independent of disposable workload resources.
 
 The demo application follows the GitOps image path:
@@ -22,7 +16,7 @@ The demo application follows the GitOps image path:
 CI -> GHCR -> Git image digest update -> Argo CD -> Kubernetes -> worker containerd -> GHCR
 ```
 
-Argo CD never pulls the container image itself. It reconciles the Deployment from Git; kubelet/containerd on the scheduled worker pulls the referenced image from GHCR.
+Argo CD reconciles the Deployment from Git; kubelet/containerd on the scheduled worker pulls the referenced image from GHCR.
 
 ## Platform
 
@@ -38,7 +32,7 @@ Kubernetes runtime credentials are committed as `SealedSecret` resources. Argo C
 ## Commands
 
 ```bash
-make install-argocd
+make argocd
 make verify
 
 kubectl --kubeconfig .kube/config get sealedsecrets -A

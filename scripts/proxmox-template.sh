@@ -29,6 +29,13 @@ template_vmid=$3
 storage=$4
 bridge=$5
 
+for value in "$ssh_target" "$proxmox_node" "$template_vmid" "$storage" "$bridge"; do
+  [[ -n "$value" ]] || {
+    echo 'ERROR: template parameters must not be empty. Check .env.' >&2
+    exit 2
+  }
+done
+
 image_url="https://cloud-images.ubuntu.com/releases/noble/release-20260826/ubuntu-24.04-server-cloudimg-amd64.img"
 image_sha256="d0fe84bb5f80853425fa6be28e2c106f30104c3cfe8611933f2e65c9b63f0e30"
 template_name="ubuntu-2404-cloudinit"

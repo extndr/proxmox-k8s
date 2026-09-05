@@ -7,7 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 USER_ID="prometheus@pve"
 TOKEN_ID="monitoring"
-KUBECONFIG_FILE=${KUBECONFIG:-.kube/config}
+export KUBECONFIG="$PWD/.kube/config"
 
 die() {
   echo "ERROR: $*" >&2
@@ -18,7 +18,7 @@ for command in ssh jq kubectl; do
   command -v "$command" >/dev/null 2>&1 || die "$command is required."
 done
 
-[[ -f "$KUBECONFIG_FILE" ]] || die "kubeconfig not found: $KUBECONFIG_FILE"
+[[ -f "$KUBECONFIG" ]] || die "kubeconfig not found: $KUBECONFIG"
 
 # Create the read-only Proxmox service identity if it does not already exist.
 # USER_ID is intentionally expanded locally before being sent over SSH.
@@ -36,16 +36,15 @@ ssh "$PVE_SSH" \
 
 # The Proxmox root CA is public trust material, not a secret. Keep the
 # existing exporter setup reproducible without coupling it to secret handling.
-kubectl --kubeconfig "$KUBECONFIG_FILE" create namespace monitoring \
-  --dry-run=client -o yaml | \
-  kubectl --kubeconfig "$KUBECONFIG_FILE" apply --server-side=true \
+kubectl create namespace monitoring --dry-run=client -o yaml | \
+  kubectl apply --server-side=true \
     --field-manager=monitoring-bootstrap -f - >/dev/null
 
 ssh "$PVE_SSH" cat /etc/pve/pve-root-ca.pem | \
-  kubectl --kubeconfig "$KUBECONFIG_FILE" -n monitoring create configmap pve-ca \
+  kubectl -n monitoring create configmap pve-ca \
     --from-file=pve-root-ca.pem=/dev/stdin \
     --dry-run=client -o yaml | \
-  kubectl --kubeconfig "$KUBECONFIG_FILE" apply --server-side=true \
+  kubectl apply --server-side=true \
     --field-manager=monitoring-bootstrap -f - >/dev/null
 
 # Existing tokens cannot be read back from Proxmox. If it already exists,

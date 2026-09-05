@@ -52,17 +52,8 @@ jobs:
         with:
           version: 2026.8.2
 
-      - name: Lint
-        run: make lint
-
-      - name: Validate
-        run: make validate
-
-      - name: Test
-        run: make test
-
-      - name: Scan
-        run: make scan
+      - name: Check repository
+        run: make check
 
       # PRs verify the same Buildx path used for publishing, but never push.
       - name: Set up Docker Buildx

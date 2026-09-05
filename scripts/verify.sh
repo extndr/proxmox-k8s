@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${KUBECONFIG:?KUBECONFIG must point at .kube/config}"
-TF_DIR=${TF_DIR:-terraform}
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+export KUBECONFIG="$PWD/.kube/config"
+[[ -f "$KUBECONFIG" ]] || {
+  echo "ERROR: kubeconfig not found: $KUBECONFIG" >&2
+  exit 1
+}
 
 echo '== Cluster =='
 kubectl cluster-info
 kubectl get nodes -o wide
 
-mapfile -t expected_nodes < <(terraform -chdir="$TF_DIR" output -raw node_names)
+mapfile -t expected_nodes < <(terraform -chdir=terraform output -raw node_names)
 mapfile -t actual_nodes < <(
   kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort
 )
