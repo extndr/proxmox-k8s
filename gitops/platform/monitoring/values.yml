@@ -65,6 +65,10 @@ prometheus:
   service:
     type: ClusterIP
   prometheusSpec:
+    replicas: 2
+    podAntiAffinity: hard
+    podAntiAffinityTopologyKey: kubernetes.io/hostname
+
     retention: 7d
     retentionSize: 4GiB
     walCompression: true
@@ -190,6 +194,10 @@ alertmanager:
       - /etc/alertmanager/config/*.tmpl
 
   alertmanagerSpec:
+    replicas: 2
+    podAntiAffinity: hard
+    podAntiAffinityTopologyKey: kubernetes.io/hostname
+
     resources:
       requests:
         cpu: 25m
