@@ -10,12 +10,13 @@ on:
       - main
 
 permissions:
-  # Keep the default workflow read-only; publish elevates only what it needs.
   contents: read
 
+# Cancel only superseded PR runs. Every main push gets its own workflow run;
+# publishing is serialized separately at the job level.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   DEMO_APP_IMAGE: ghcr.io/extndr/proxmox-k8s-demo-app
@@ -25,10 +26,27 @@ jobs:
     name: Verify
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      demo_app_changed: ${{ steps.filter.outputs.demo_app }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 20
           persist-credentials: false
+
+      - name: Detect demo app inputs
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          # Ignored for pull_request events; there the PR base is used automatically.
+          # On main pushes this compares against the previous state of main.
+          base: ${{ github.ref }}
+          filters: |
+            demo_app:
+              - 'demo-app/**'
 
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
@@ -46,49 +64,88 @@ jobs:
       - name: Scan
         run: make scan
 
-      # PRs verify the image builds but never publish it.
+      # PRs verify the same Buildx path used for publishing, but never push.
+      - name: Set up Docker Buildx
+        if: github.event_name == 'pull_request' && steps.filter.outputs.demo_app == 'true'
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
       - name: Build demo app
-        if: github.event_name == 'pull_request'
-        run: docker build --tag demo-app:ci demo-app
+        if: github.event_name == 'pull_request' && steps.filter.outputs.demo_app == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: demo-app
+          platforms: linux/amd64
+          push: false
+          build-args: |
+            VERSION=sha-${{ github.sha }}
+            COMMIT=${{ github.sha }}
 
   publish:
     name: Publish demo app
-    if: github.event_name == 'push'
     needs: verify
+    if: github.event_name == 'push' && needs.verify.outputs.demo_app_changed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+
+    # Serialize only app publishes. queue:max prevents a newer app-changing push
+    # from evicting an already pending publish.
+    concurrency:
+      group: publish-demo-app-${{ github.ref }}
+      cancel-in-progress: false
+      queue: max
+
     permissions:
       contents: write
       packages: write
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
+      # A queued run can become stale while waiting. Unrelated main changes are
+      # safe; a newer demo-app input means this artifact must not be promoted.
+      - name: Check publish freshness
+        id: freshness
+        shell: bash
+        run: |
+          git fetch origin main
+          if git diff --quiet "$GITHUB_SHA" origin/main -- \
+            demo-app/; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "A newer commit changed demo-app inputs; skipping stale publish."
+          fi
+
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        if: steps.freshness.outputs.current == 'true'
         with:
           version: 2026.8.2
           install_args: kustomize
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: steps.freshness.outputs.current == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        if: steps.freshness.outputs.current == 'true'
 
       - name: Docker metadata
         id: metadata
+        if: steps.freshness.outputs.current == 'true'
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.DEMO_APP_IMAGE }}
           tags: |
             type=sha,format=long,priority=300
-            type=raw,value=main,priority=200
 
       - name: Build and push demo app
         id: build
+        if: steps.freshness.outputs.current == 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: demo-app
@@ -100,25 +157,53 @@ jobs:
             VERSION=${{ steps.metadata.outputs.version }}
             COMMIT=${{ github.sha }}
 
-      # Promote the exact published image digest; Argo CD handles deployment.
+      # Promote the exact immutable artifact; Argo CD owns reconciliation.
       - name: Update GitOps image digest
+        if: steps.freshness.outputs.current == 'true'
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         working-directory: gitops/workloads/demo-app
         run: |
           kustomize edit set image "demo-app=${DEMO_APP_IMAGE}@${IMAGE_DIGEST}"
+          kustomize build . >/dev/null
           git diff --check
 
       - name: Commit GitOps update
+        if: steps.freshness.outputs.current == 'true'
         env:
           DEPLOY_VERSION: ${{ steps.metadata.outputs.version }}
+        shell: bash
         run: |
+          set -euo pipefail
+
           if git diff --quiet -- gitops/workloads/demo-app/kustomization.yml; then
             exit 0
           fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add gitops/workloads/demo-app/kustomization.yml
           git commit -m "Update demo app image to ${DEPLOY_VERSION}"
-          git pull --rebase origin main
-          git push origin HEAD:main
+
+          # main may advance while the image is building. Rebase across unrelated
+          # changes, but never promote if newer demo-app inputs appeared.
+          for attempt in 1 2 3; do
+            git fetch origin main
+
+            if ! git diff --quiet "$GITHUB_SHA" origin/main -- \
+              demo-app/; then
+              echo "A newer commit changed demo-app inputs; skipping stale promotion."
+              exit 0
+            fi
+
+            git rebase origin/main
+
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            echo "main advanced during push; retrying (${attempt}/3)..."
+          done
+
+          echo "Failed to publish GitOps update after 3 attempts." >&2
+          exit 1
