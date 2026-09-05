@@ -1,13 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
 : "${PVE_SSH:?PVE_SSH is required}"
 
 USER_ID="prometheus@pve"
 TOKEN_ID="monitoring"
-SOPS_FILE="secrets/monitoring.sops.yaml"
+KUBECONFIG_FILE=${KUBECONFIG:-.kube/config}
 
-# Create service user if missing.
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+for command in ssh jq kubectl; do
+  command -v "$command" >/dev/null 2>&1 || die "$command is required."
+done
+
+[[ -f "$KUBECONFIG_FILE" ]] || die "kubeconfig not found: $KUBECONFIG_FILE"
+
+# Create the read-only Proxmox service identity if it does not already exist.
 # USER_ID is intentionally expanded locally before being sent over SSH.
 # shellcheck disable=SC2029
 ssh "$PVE_SSH" "
@@ -15,25 +28,42 @@ ssh "$PVE_SSH" "
   pveum user add '$USER_ID' --comment 'Prometheus PVE Exporter'
 "
 
-# Ensure read-only permissions.
 # shellcheck disable=SC2029
 ssh "$PVE_SSH" \
   "pveum acl modify / \
     -user '$USER_ID' \
     -role PVEAuditor"
 
-# Stop if token already exists.
+# The Proxmox root CA is public trust material, not a secret. Keep the
+# existing exporter setup reproducible without coupling it to secret handling.
+kubectl --kubeconfig "$KUBECONFIG_FILE" create namespace monitoring \
+  --dry-run=client -o yaml | \
+  kubectl --kubeconfig "$KUBECONFIG_FILE" apply --server-side=true \
+    --field-manager=monitoring-bootstrap -f - >/dev/null
+
+ssh "$PVE_SSH" cat /etc/pve/pve-root-ca.pem | \
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n monitoring create configmap pve-ca \
+    --from-file=pve-root-ca.pem=/dev/stdin \
+    --dry-run=client -o yaml | \
+  kubectl --kubeconfig "$KUBECONFIG_FILE" apply --server-side=true \
+    --field-manager=monitoring-bootstrap -f - >/dev/null
+
+# Existing tokens cannot be read back from Proxmox. If it already exists,
+# the committed SealedSecret remains the source for the Kubernetes copy.
 # shellcheck disable=SC2029
 if ssh "$PVE_SSH" \
   "pveum user token list '$USER_ID' --output-format json" |
   jq -e --arg token "$TOKEN_ID" \
     '.[] | select(.tokenid == $token)' >/dev/null
 then
-  echo "Monitoring token already exists: ${USER_ID}!${TOKEN_ID}"
+  echo "Monitoring identity: ${USER_ID}!${TOKEN_ID}"
+  echo "Proxmox CA ConfigMap: monitoring/pve-ca"
+  echo "Monitoring token already exists; Kubernetes credentials stay managed by Sealed Secrets."
   exit 0
 fi
 
-# Create token and capture one-time secret.
+# Proxmox returns the token secret only once. Do not persist it here: seal it
+# with kubeseal and commit the resulting SealedSecret through the normal GitOps flow.
 # shellcheck disable=SC2029
 token_value="$(
   ssh "$PVE_SSH" \
@@ -43,15 +73,9 @@ token_value="$(
   jq -er '.value'
 )"
 
-# Write directly into encrypted SOPS file.
-printf '%s' "$token_value" |
-  jq -Rs . |
-  sops set --value-stdin \
-    "$SOPS_FILE" \
-    '["PVE_MONITORING_TOKEN_VALUE"]'
-
+printf '%s\n' \
+  "Monitoring identity created: ${USER_ID}!${TOKEN_ID}" \
+  'The token value below is shown once by Proxmox. Seal it into' \
+  'gitops/platform/monitoring/pve-exporter-credentials.yml before discarding it:' \
+  "$token_value"
 unset token_value
-
-echo "Monitoring bootstrap completed."
-echo "Identity: ${USER_ID}!${TOKEN_ID}"
-echo "Secret stored in: ${SOPS_FILE}"

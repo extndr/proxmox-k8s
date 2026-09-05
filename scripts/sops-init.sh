@@ -5,8 +5,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 config=.sops.yaml
 secret=secrets/proxmox.sops.yaml
-monitoring_secret=secrets/monitoring.sops.yaml
-workloads_secret=secrets/workloads.sops.yaml
 age_key=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
 
 die() {
@@ -14,12 +12,12 @@ die() {
   exit 1
 }
 
-for command in sops age-keygen openssl; do
+for command in sops age-keygen; do
   command -v "$command" >/dev/null 2>&1 || die "$command is required; run mise install first."
 done
 
 if [[ ! -f "$age_key" ]]; then
-  if [[ -f "$config" ]] || [[ -f "$secret" ]] || [[ -f "$monitoring_secret" ]] || [[ -f "$workloads_secret" ]]; then
+  if [[ -f "$config" ]] || [[ -f "$secret" ]]; then
     die "age identity is missing. Restore it instead of creating a new one."
   fi
 
@@ -33,9 +31,6 @@ if [[ ! -f "$config" ]]; then
   recipient=$(age-keygen -y "$age_key")
   cat > "$config" <<EOF_CONFIG
 creation_rules:
-  - path_regex: '^secrets/kubernetes/.*\\.sops\\.yaml$'
-    encrypted_regex: '^(data|stringData)$'
-    age: $recipient
   - path_regex: '^secrets/.*\\.sops\\.yaml$'
     age: $recipient
 EOF_CONFIG
@@ -56,40 +51,8 @@ fi
 
 sops decrypt "$secret" >/dev/null || die "the current age identity cannot decrypt $secret."
 
-if [[ ! -f "$monitoring_secret" ]]; then
-  grafana_password=$(openssl rand -hex 24)
-  tmp=$(mktemp "${monitoring_secret}.XXXXXX")
-  if ! printf '%s\n' \
-    "GRAFANA_ADMIN_PASSWORD: $grafana_password" \
-    '# Secret value for prometheus@pve!monitoring.' \
-    'PVE_MONITORING_TOKEN_VALUE: CHANGE_ME' | \
-    sops encrypt --filename-override "$monitoring_secret" > "$tmp"; then
-    rm -f "$tmp"
-    exit 1
-  fi
-  mv "$tmp" "$monitoring_secret"
-fi
-
-sops decrypt "$monitoring_secret" >/dev/null || die "the current age identity cannot decrypt $monitoring_secret."
-
-if [[ ! -f "$workloads_secret" ]]; then
-  postgres_password=$(openssl rand -hex 24)
-  tmp=$(mktemp "${workloads_secret}.XXXXXX")
-  if ! printf '%s\n' \
-    "POSTGRES_PASSWORD: $postgres_password" | \
-    sops encrypt --filename-override "$workloads_secret" > "$tmp"; then
-    rm -f "$tmp"
-    exit 1
-  fi
-  mv "$tmp" "$workloads_secret"
-fi
-
-sops decrypt "$workloads_secret" >/dev/null || die "the current age identity cannot decrypt $workloads_secret."
-
 printf '%s\n' \
   "SOPS config:  $config" \
   "age identity: $age_key" \
   "secret:       $secret" \
-  "monitoring:   $monitoring_secret" \
-  "workloads:    $workloads_secret" \
-  'Next: make secrets-edit NAME=monitoring'
+  'Next: make secrets-edit'

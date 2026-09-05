@@ -32,10 +32,8 @@ KUBECONFIG_FILE := $(CURDIR)/.kube/config
 SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 export SOPS_AGE_KEY_FILE
 PROXMOX_SECRET := secrets/proxmox.sops.yaml
-MONITORING_SECRET := secrets/monitoring.sops.yaml
-WORKLOADS_SECRET := secrets/workloads.sops.yaml
 
-.PHONY: help secrets secrets-init secrets-edit secrets-apply template fmt lint validate test scan tf-init plan infra inventory configure install-argocd argocd-password argocd-forward monitoring-bootstrap monitoring-status grafana-password grafana-forward prometheus-forward alertmanager-forward verify up reset destroy clean
+.PHONY: help secrets secrets-init secrets-edit template fmt lint validate test scan tf-init plan infra inventory configure install-argocd argocd-password argocd-forward monitoring-bootstrap monitoring-status grafana-password grafana-forward prometheus-forward alertmanager-forward verify up reset destroy clean
 
 help:
 	@printf '%s\n' \
@@ -47,13 +45,12 @@ help:
 	  '  make scan                 - scan repository files for secrets and IaC misconfigurations' \
 	  '' \
 	  'Secrets:' \
-	  '  make secrets              - check encrypted secrets and local SOPS access' \
-	  '  make secrets-init         - create the local age identity and SOPS config' \
-	  '  make secrets-edit NAME=x  - edit one encrypted secret' \
-	  '  make secrets-apply        - materialize Kubernetes runtime secrets' \
+	  '  make secrets              - check the encrypted Proxmox secret and local SOPS access' \
+	  '  make secrets-init         - create the local age identity, SOPS config, and Proxmox secret' \
+	  '  make secrets-edit         - edit the encrypted Proxmox secret' \
 	  '' \
 	  'Monitoring:' \
-	  '  make monitoring-bootstrap - create the Proxmox monitoring identity and store its API token in SOPS' \
+	  '  make monitoring-bootstrap - bootstrap the Proxmox monitoring identity and CA trust' \
 	  '  make monitoring-status    - show monitoring pods, services, monitors, and rules' \
 	  '  make grafana-password     - show the Grafana admin password' \
 	  '  make grafana-forward      - forward Grafana to http://localhost:3000' \
@@ -78,52 +75,19 @@ help:
 secrets:
 	@test -f .sops.yaml || { echo 'ERROR: .sops.yaml is missing; run make secrets-init.' >&2; exit 1; }
 	@test -f "$(SOPS_AGE_KEY_FILE)" || { echo 'ERROR: age identity is missing; restore $(SOPS_AGE_KEY_FILE).' >&2; exit 1; }
-	@for file in "$(PROXMOX_SECRET)" "$(MONITORING_SECRET)" "$(WORKLOADS_SECRET)"; do \
-		test -f "$$file" || { echo "ERROR: $$file is missing; run make secrets-init." >&2; exit 1; }; \
-		test "$$(sops filestatus "$$file")" = '{"encrypted":true}' || { echo "ERROR: $$file is not SOPS-encrypted." >&2; exit 1; }; \
-		sops decrypt "$$file" >/dev/null || { echo "ERROR: $$file is not decryptable with the current age identity." >&2; exit 1; }; \
-	done
+	@test -f "$(PROXMOX_SECRET)" || { echo 'ERROR: $(PROXMOX_SECRET) is missing; run make secrets-init.' >&2; exit 1; }
+	@test "$$(sops filestatus "$(PROXMOX_SECRET)")" = '{"encrypted":true}' || { echo 'ERROR: $(PROXMOX_SECRET) is not SOPS-encrypted.' >&2; exit 1; }
+	@sops decrypt "$(PROXMOX_SECRET)" >/dev/null || { echo 'ERROR: $(PROXMOX_SECRET) is not decryptable with the current age identity.' >&2; exit 1; }
 	@sops exec-env "$(PROXMOX_SECRET)" 'test -n "$${TF_VAR_proxmox_api_token:-}" && test "$$TF_VAR_proxmox_api_token" != CHANGE_ME' >/dev/null || { echo 'ERROR: Proxmox API token is missing or invalid.' >&2; exit 1; }
-	@sops exec-env "$(MONITORING_SECRET)" 'test -n "$${GRAFANA_ADMIN_PASSWORD:-}" && test "$$GRAFANA_ADMIN_PASSWORD" != CHANGE_ME && test -n "$${PVE_MONITORING_TOKEN_VALUE:-}" && test "$$PVE_MONITORING_TOKEN_VALUE" != CHANGE_ME' >/dev/null || { echo 'ERROR: monitoring secrets are incomplete; run make secrets-init, then make secrets-edit NAME=monitoring.' >&2; exit 1; }
-	@sops exec-env "$(WORKLOADS_SECRET)" 'test -n "$${POSTGRES_PASSWORD:-}" && test "$$POSTGRES_PASSWORD" != CHANGE_ME' >/dev/null || { echo 'ERROR: workload secrets are incomplete; run make secrets-init.' >&2; exit 1; }
-	@printf '%s\n' 'SOPS config:  ok' 'age identity: ok' 'proxmox:      decryptable' 'monitoring:   decryptable' 'workloads:    decryptable'
+	@printf '%s\n' 'SOPS config:  ok' 'age identity: ok' 'proxmox:      decryptable'
 
 secrets-init:
 	@SOPS_AGE_KEY_FILE="$(SOPS_AGE_KEY_FILE)" ./scripts/sops-init.sh
 
 secrets-edit:
-	@test -n "$(NAME)" || { echo 'ERROR: NAME is required, for example: make secrets-edit NAME=proxmox' >&2; exit 1; }
-	@file="secrets/$(NAME).sops.yaml"; \
-		test -f "$$file" || { echo "ERROR: $$file does not exist." >&2; exit 1; }; \
-		exec sops "$$file"
+	@test -f "$(PROXMOX_SECRET)" || { echo 'ERROR: $(PROXMOX_SECRET) is missing; run make secrets-init.' >&2; exit 1; }
+	@exec sops "$(PROXMOX_SECRET)"
 
-secrets-apply: secrets
-	@kubectl --kubeconfig "$(KUBECONFIG_FILE)" create namespace monitoring --dry-run=client -o yaml | \
-		kubectl --kubeconfig "$(KUBECONFIG_FILE)" apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null
-	@KUBECONFIG="$(KUBECONFIG_FILE)" sops exec-env "$(MONITORING_SECRET)" '\
-		printf %s "$$GRAFANA_ADMIN_PASSWORD" | \
-		  kubectl -n monitoring create secret generic grafana-admin \
-		    --from-literal=admin-user=admin \
-		    --from-file=admin-password=/dev/stdin \
-		    --dry-run=client -o yaml | kubectl apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null; \
-		printf %s "$$PVE_MONITORING_TOKEN_VALUE" | \
-		  kubectl -n monitoring create secret generic pve-exporter-credentials \
-		    --from-file=token-value=/dev/stdin \
-		    --dry-run=client -o yaml | kubectl apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null'
-	@kubectl --kubeconfig "$(KUBECONFIG_FILE)" create namespace demo --dry-run=client -o yaml | \
-		kubectl --kubeconfig "$(KUBECONFIG_FILE)" apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null
-	@KUBECONFIG="$(KUBECONFIG_FILE)" sops exec-env "$(WORKLOADS_SECRET)" '\
-		printf %s "$$POSTGRES_PASSWORD" | \
-		  kubectl -n demo create secret generic postgres-credentials \
-		    --from-file=password=/dev/stdin \
-		    --dry-run=client -o yaml | kubectl apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null'
-	@test -n "$${PVE_SSH:-}" || { echo 'ERROR: PVE_SSH is required in .env to fetch the Proxmox CA.' >&2; exit 1; }
-	@ssh "$${PVE_SSH}" cat /etc/pve/pve-root-ca.pem | \
-		kubectl --kubeconfig "$(KUBECONFIG_FILE)" -n monitoring create configmap pve-ca \
-		  --from-file=pve-root-ca.pem=/dev/stdin \
-		  --dry-run=client -o yaml | \
-		kubectl --kubeconfig "$(KUBECONFIG_FILE)" apply --server-side=true --field-manager=secrets-bootstrap -f - >/dev/null
-	@echo 'Kubernetes runtime secrets: applied'
 
 # Template creation stays a one-time host prerequisite while the pinned
 # bpg/proxmox 0.111.1 provider has the known first-apply import_from bug #3022.
@@ -258,7 +222,7 @@ verify:
 
 # Terraform creates VMs, Ansible configures Kubernetes, Argo CD is installed
 # and seeded, then verification checks the stable running-lab invariants.
-up: infra configure secrets-apply install-argocd verify
+up: infra configure install-argocd verify
 
 reset: inventory
 	@ANSIBLE_CONFIG="$(CURDIR)/$(ANSIBLE_DIR)/ansible.cfg" \

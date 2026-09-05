@@ -8,6 +8,7 @@ resources:
   - applications/metallb-config.yml
   - applications/envoy-gateway.yml
   - applications/metrics-server.yml
+  - applications/sealed-secrets.yml
   - applications/monitoring.yml
   - applications/local-path-provisioner.yml
   - applications/gateway.yml

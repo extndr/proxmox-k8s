@@ -82,6 +82,46 @@ url = "https://dl.k8s.io/v1.36.4/bin/darwin/amd64/kubectl"
 checksum = "sha256:31947857be7583f3e4e6d889a3fb781ca813a45c20f11ccb3ef309714d01a9f3"
 url = "https://dl.k8s.io/v1.36.4/bin/windows/amd64/kubectl.exe"
 
+[[tools.kubeseal]]
+version = "0.39.1"
+backend = "aqua:bitnami/sealed-secrets"
+specifiers = ["0.39.1"]
+
+[tools.kubeseal."platforms.linux-arm64"]
+checksum = "sha256:e90e86c6319ff92410856a339f0dfeb88d0d5e351e144e0ed34c28e1d7ce477f"
+url = "https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/kubeseal-0.39.1-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/bitnami/sealed-secrets/releases/assets/521998649"
+
+[tools.kubeseal."platforms.linux-arm64-musl"]
+checksum = "sha256:e90e86c6319ff92410856a339f0dfeb88d0d5e351e144e0ed34c28e1d7ce477f"
+url = "https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/kubeseal-0.39.1-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/bitnami/sealed-secrets/releases/assets/521998649"
+
+[tools.kubeseal."platforms.linux-x64"]
+checksum = "sha256:785c8316370073426d6ce0b7e9e949bd7ba3709ef7f9e45a900aa07e5596db9c"
+url = "https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/kubeseal-0.39.1-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/bitnami/sealed-secrets/releases/assets/521998648"
+
+[tools.kubeseal."platforms.linux-x64-musl"]
+checksum = "sha256:785c8316370073426d6ce0b7e9e949bd7ba3709ef7f9e45a900aa07e5596db9c"
+url = "https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/kubeseal-0.39.1-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/bitnami/sealed-secrets/releases/assets/521998648"
+
+[tools.kubeseal."platforms.macos-arm64"]
+checksum = "sha256:b338e7efcc2b4ec54f4aa94ad80f508a1c76b4d722bde4d0d92d4b2c88bbe2df"
+url = "https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/kubeseal-0.39.1-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/bitnami/sealed-secrets/releases/assets/521998647"
+
+[tools.kubeseal."platforms.macos-x64"]
+checksum = "sha256:ece1e36b371c5e236feccd69ff8b055ec9ae9e3647f72d632dbd5e51a252b437"
+url = "https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/kubeseal-0.39.1-darwin-amd64.tar.gz"
+url_api = "https://api.github.com/repos/bitnami/sealed-secrets/releases/assets/521998680"
+
+[tools.kubeseal."platforms.windows-x64"]
+checksum = "sha256:8b9559c1baa589e9f0908ce15dc1085c76ff21c371ab32b286c67e23f72aed7e"
+url = "https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/kubeseal-0.39.1-windows-amd64.tar.gz"
+url_api = "https://api.github.com/repos/bitnami/sealed-secrets/releases/assets/521998679"
+
 [[tools.kustomize]]
 version = "5.8.1"
 backend = "aqua:kubernetes-sigs/kustomize"
@@ -90,30 +130,37 @@ specifiers = ["5.8.1"]
 [tools.kustomize."platforms.linux-arm64"]
 checksum = "sha256:0953ea3e476f66d6ddfcd911d750f5167b9365aa9491b2326398e289fef2c142"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160971"
 
 [tools.kustomize."platforms.linux-arm64-musl"]
 checksum = "sha256:0953ea3e476f66d6ddfcd911d750f5167b9365aa9491b2326398e289fef2c142"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160971"
 
 [tools.kustomize."platforms.linux-x64"]
 checksum = "sha256:029a7f0f4e1932c52a0476cf02a0fd855c0bb85694b82c338fc648dcb53a819d"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160972"
 
 [tools.kustomize."platforms.linux-x64-musl"]
 checksum = "sha256:029a7f0f4e1932c52a0476cf02a0fd855c0bb85694b82c338fc648dcb53a819d"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160972"
 
 [tools.kustomize."platforms.macos-arm64"]
 checksum = "sha256:8886f8a78474e608cc81234f729fda188a9767da23e28925802f00ece2bab288"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160975"
 
 [tools.kustomize."platforms.macos-x64"]
 checksum = "sha256:ee7cf0c1e3592aa7bb66ba82b359933a95e7f2e0b36e5f53ed0a4535b017f2f8"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160974"
 
 [tools.kustomize."platforms.windows-x64"]
 checksum = "sha256:8ec7f5e815e526d4622c06df0a7793d8cfb6eb1c74f816b46166097fef8b26c6"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_windows_amd64.zip"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160980"
 
 [[tools."pipx:ansible-core"]]
 version = "2.21.3"

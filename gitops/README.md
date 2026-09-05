@@ -33,13 +33,15 @@ gitops/argocd/applications/
 
 `demo-gateway` exposes one shared HTTP listener for `*.lab.home.arpa`. Each workload owns its precise hostname in its `HTTPRoute`, so adding a workload under that domain does not require editing the central Gateway.
 
+Kubernetes runtime credentials are committed as `SealedSecret` resources. Argo CD applies those resources and the Sealed Secrets controller reconciles the corresponding native Kubernetes `Secret` objects. SOPS is reserved for bootstrap credentials consumed outside Kubernetes.
+
 ## Commands
 
 ```bash
-make secrets-apply
 make install-argocd
 make verify
 
+kubectl --kubeconfig .kube/config get sealedsecrets -A
 kubectl --kubeconfig .kube/config -n argocd get applications
 kubectl --kubeconfig .kube/config -n argocd get applicationsets
 kubectl --kubeconfig .kube/config -n argocd describe application <app>

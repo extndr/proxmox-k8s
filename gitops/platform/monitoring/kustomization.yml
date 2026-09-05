@@ -2,6 +2,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - grafana-admin.yml
+  - pve-exporter-credentials.yml
   - pve-exporter/deployment.yml
   - pve-exporter/service.yml
   - monitors/pve.yml
