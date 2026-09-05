@@ -13,10 +13,10 @@ Removing a workload directory removes its generated Argo CD Application and prun
 The demo application follows the GitOps image path:
 
 ```text
-CI -> GHCR -> Git image digest update -> Argo CD -> Kubernetes -> worker containerd -> GHCR
+CI -> delivery -> GHCR -> Git image digest update -> Argo CD -> Kubernetes -> worker containerd -> GHCR
 ```
 
-Argo CD reconciles the Deployment from Git; kubelet/containerd on the scheduled worker pulls the referenced image from GHCR.
+CI verifies the change; delivery publishes the image and commits its immutable digest. Argo CD then reconciles the Deployment from Git, and kubelet/containerd on the scheduled worker pulls the referenced image from GHCR.
 
 ## Platform
 

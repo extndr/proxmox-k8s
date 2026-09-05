@@ -195,9 +195,10 @@ The ntfy UI is exposed at `http://ntfy.lab.home.arpa`. A client still needs a ro
 `demo-app/` is a small Go service used to exercise the cluster. It exposes `/healthz`,
 `/readyz`, `/db`, and `/version`; PostgreSQL is its only runtime dependency.
 
-CI publishes the image to GHCR, commits the immutable image digest
-to `gitops/workloads/demo-app/kustomization.yml`, and Argo CD reconciles it. The GHCR
-package is expected to be public, so the workers do not need an `imagePullSecret`.
+CI verifies the repository and builds changed demo-app inputs on pull requests. After a
+successful CI run on `main`, the delivery workflow publishes the image to GHCR, commits
+the immutable digest to `gitops/workloads/demo-app/kustomization.yml`, and Argo CD
+reconciles it. The GHCR package is public, so workers do not need an `imagePullSecret`.
 
 The demo endpoint is `http://demo.lab.home.arpa`.
 
