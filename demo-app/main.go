@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -130,6 +131,8 @@ func envOrDefault(name, fallback string) string {
 
 func newHandler(db database) http.Handler {
 	mux := http.NewServeMux()
+
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

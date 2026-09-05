@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -23,6 +24,19 @@ func TestHealthz(t *testing.T) {
 	newHandler(fakeDatabase{}).ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected %d, got %d", http.StatusOK, response.Code)
+	}
+}
+
+func TestMetrics(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	response := httptest.NewRecorder()
+
+	newHandler(fakeDatabase{}).ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, response.Code)
+	}
+	if !strings.Contains(response.Body.String(), "go_goroutines") {
+		t.Fatal("expected Go runtime metrics")
 	}
 }
 

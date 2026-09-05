@@ -6,6 +6,7 @@ resources:
 - service.yml
 - httproute.yml
 - pdb.yml
+- servicemonitor.yml
 images:
 - digest: sha256:dfa6b71ca28f242de2d2ce13761b951309253ee54480eb182b86ce3187e4381f
   name: demo-app
