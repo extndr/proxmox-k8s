@@ -18,7 +18,7 @@ die() {
 [[ "$(sops filestatus "$secret")" == '{"encrypted":true}' ]] || die "$secret is not SOPS-encrypted."
 sops decrypt "$secret" >/dev/null || die "$secret is not decryptable with the current age identity."
 sops exec-env "$secret" \
-  'test -n "${TF_VAR_proxmox_api_token:-}" && test "$TF_VAR_proxmox_api_token" != CHANGE_ME' \
+  "test -n \"\${TF_VAR_proxmox_api_token:-}\" && test \"\$TF_VAR_proxmox_api_token\" != CHANGE_ME" \
   >/dev/null || die 'Proxmox API token is missing or invalid.'
 
 printf '%s\n' \
