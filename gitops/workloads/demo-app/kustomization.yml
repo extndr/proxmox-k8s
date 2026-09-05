@@ -8,6 +8,6 @@ resources:
 - pdb.yml
 - servicemonitor.yml
 images:
-- digest: sha256:dfa6b71ca28f242de2d2ce13761b951309253ee54480eb182b86ce3187e4381f
+- digest: sha256:2079ca1cedc8f055e734f1f0495a6a384b87cab6a893cac6fa4ebf8011ee10cd
   name: demo-app
   newName: ghcr.io/extndr/proxmox-k8s-demo-app
